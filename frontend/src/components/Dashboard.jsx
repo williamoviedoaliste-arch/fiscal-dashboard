@@ -22,7 +22,7 @@ const Dashboard = ({ monthlyData, sellersData }) => {
       content: <MonthlyTab monthlyData={monthlyData} />
     },
     {
-      label: 'Notificaciones',
+      label: 'Uso de Pendings',
       icon: '🔔',
       content: <PendingsTab />
     },
