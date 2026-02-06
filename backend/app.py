@@ -611,5 +611,259 @@ def get_nextsteps_metrics():
         return jsonify({'error': str(e), 'details': traceback.format_exc()}), 500
 
 
+@app.route('/api/pendings/summary', methods=['GET'])
+def get_pendings_summary():
+    """
+    Obtiene resumen general de notificaciones (pendings)
+    """
+    query = """
+    WITH totals AS (
+      SELECT
+        COUNTIF(event = 'created' AND reason = 'success') as total_enviadas,
+        COUNTIF(event = 'deleted' AND reason IN ('success', 'success_web')) as total_pagadas_desde_notif,
+        COUNTIF(event = 'deleted' AND reason = 'dismiss') as total_descartadas,
+        COUNT(DISTINCT user_id) as sellers_unicos
+      FROM `meli-bi-data.SBOX_SBOXMERCH.DIM_PENDINGS`
+      WHERE content_id = 'mp.sellers.generic_pendings.das_payment_pendings'
+    ),
+    tiempo_pago AS (
+      SELECT
+        AVG(TIMESTAMP_DIFF(updated_at, created_at, DAY)) as dias_promedio
+      FROM `meli-bi-data.SBOX_SBOXMERCH.DIM_PENDINGS`
+      WHERE content_id = 'mp.sellers.generic_pendings.das_payment_pendings'
+        AND event = 'deleted'
+        AND reason IN ('success', 'success_web')
+    )
+    SELECT
+      t.total_enviadas,
+      t.total_pagadas_desde_notif,
+      t.total_descartadas,
+      t.total_enviadas - t.total_pagadas_desde_notif - t.total_descartadas as total_pendientes,
+      t.sellers_unicos,
+      ROUND((t.total_pagadas_desde_notif * 100.0 / NULLIF(t.total_enviadas, 0)), 2) as tasa_conversion_global,
+      ROUND(tp.dias_promedio, 1) as tiempo_promedio_dias
+    FROM totals t
+    CROSS JOIN tiempo_pago tp
+    """
+
+    try:
+        query_job = client.query(query)
+        results = list(query_job.result())
+
+        if not results:
+            return jsonify({'error': 'No se encontraron datos'}), 404
+
+        row = results[0]
+
+        return jsonify({
+            'total_enviadas': row.total_enviadas,
+            'total_pagadas_desde_notif': row.total_pagadas_desde_notif,
+            'total_descartadas': row.total_descartadas,
+            'total_pendientes': row.total_pendientes,
+            'sellers_unicos': row.sellers_unicos,
+            'tasa_conversion_global': float(row.tasa_conversion_global) if row.tasa_conversion_global else 0,
+            'tiempo_promedio_dias': float(row.tiempo_promedio_dias) if row.tiempo_promedio_dias else 0
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/pendings/monthly', methods=['GET'])
+def get_pendings_monthly():
+    """
+    Obtiene evolución mensual de notificaciones, desglosado por criticidad
+    """
+    query = """
+    WITH enviadas AS (
+      SELECT
+        FORMAT_TIMESTAMP('%Y-%m', created_at) as periodo,
+        JSON_EXTRACT_SCALAR(content, '$.criticality') as criticidad,
+        COUNT(*) as total,
+        COUNT(DISTINCT user_id) as sellers_unicos
+      FROM `meli-bi-data.SBOX_SBOXMERCH.DIM_PENDINGS`
+      WHERE content_id = 'mp.sellers.generic_pendings.das_payment_pendings'
+        AND event = 'created'
+        AND reason = 'success'
+      GROUP BY periodo, criticidad
+    ),
+    pagadas AS (
+      SELECT
+        FORMAT_TIMESTAMP('%Y-%m', updated_at) as periodo,
+        JSON_EXTRACT_SCALAR(content, '$.criticality') as criticidad,
+        COUNT(*) as total,
+        COUNT(DISTINCT user_id) as sellers_unicos
+      FROM `meli-bi-data.SBOX_SBOXMERCH.DIM_PENDINGS`
+      WHERE content_id = 'mp.sellers.generic_pendings.das_payment_pendings'
+        AND event = 'deleted'
+        AND reason IN ('success', 'success_web')
+      GROUP BY periodo, criticidad
+    ),
+    descartadas AS (
+      SELECT
+        FORMAT_TIMESTAMP('%Y-%m', updated_at) as periodo,
+        JSON_EXTRACT_SCALAR(content, '$.criticality') as criticidad,
+        COUNT(*) as total,
+        COUNT(DISTINCT user_id) as sellers_unicos
+      FROM `meli-bi-data.SBOX_SBOXMERCH.DIM_PENDINGS`
+      WHERE content_id = 'mp.sellers.generic_pendings.das_payment_pendings'
+        AND event = 'deleted'
+        AND reason = 'dismiss'
+      GROUP BY periodo, criticidad
+    ),
+    all_periods_criticalities AS (
+      SELECT DISTINCT periodo, criticidad
+      FROM (
+        SELECT periodo, criticidad FROM enviadas
+        UNION DISTINCT
+        SELECT periodo, criticidad FROM pagadas
+        UNION DISTINCT
+        SELECT periodo, criticidad FROM descartadas
+      )
+    )
+    SELECT
+      a.periodo,
+      a.criticidad,
+      IFNULL(e.total, 0) as notificaciones_enviadas,
+      IFNULL(e.sellers_unicos, 0) as sellers_enviadas,
+      IFNULL(p.total, 0) as pagos_desde_notificacion,
+      IFNULL(p.sellers_unicos, 0) as sellers_pagadas,
+      IFNULL(d.total, 0) as descartadas,
+      IFNULL(d.sellers_unicos, 0) as sellers_descartadas,
+      IFNULL(e.total, 0) - IFNULL(p.total, 0) - IFNULL(d.total, 0) as pendientes_activas,
+      ROUND((IFNULL(p.total, 0) * 100.0 / NULLIF(IFNULL(e.total, 0), 0)), 2) as tasa_conversion
+    FROM all_periods_criticalities a
+    LEFT JOIN enviadas e ON a.periodo = e.periodo AND a.criticidad = e.criticidad
+    LEFT JOIN pagadas p ON a.periodo = p.periodo AND a.criticidad = p.criticidad
+    LEFT JOIN descartadas d ON a.periodo = d.periodo AND a.criticidad = d.criticidad
+    WHERE a.periodo IS NOT NULL AND a.criticidad IS NOT NULL
+    ORDER BY a.periodo, a.criticidad
+    """
+
+    try:
+        query_job = client.query(query)
+        results = query_job.result()
+
+        # Agrupar por periodo
+        data_by_period = {}
+        for row in results:
+            periodo = row.periodo
+            if periodo not in data_by_period:
+                data_by_period[periodo] = {
+                    'periodo': periodo,
+                    'por_criticidad': {},
+                    'totales': {
+                        'notificaciones_enviadas': 0,
+                        'pagos_desde_notificacion': 0,
+                        'descartadas': 0,
+                        'pendientes_activas': 0,
+                        'sellers_enviadas': 0,
+                        'sellers_pagadas': 0
+                    }
+                }
+
+            criticidad = row.criticidad if row.criticidad else 'sin_criticidad'
+
+            data_by_period[periodo]['por_criticidad'][criticidad] = {
+                'notificaciones_enviadas': row.notificaciones_enviadas,
+                'pagos_desde_notificacion': row.pagos_desde_notificacion,
+                'descartadas': row.descartadas,
+                'pendientes_activas': row.pendientes_activas,
+                'tasa_conversion': float(row.tasa_conversion) if row.tasa_conversion else 0,
+                'sellers_enviadas': row.sellers_enviadas,
+                'sellers_pagadas': row.sellers_pagadas,
+                'sellers_descartadas': row.sellers_descartadas
+            }
+
+            # Sumar a totales
+            data_by_period[periodo]['totales']['notificaciones_enviadas'] += row.notificaciones_enviadas
+            data_by_period[periodo]['totales']['pagos_desde_notificacion'] += row.pagos_desde_notificacion
+            data_by_period[periodo]['totales']['descartadas'] += row.descartadas
+            data_by_period[periodo]['totales']['pendientes_activas'] += row.pendientes_activas
+            data_by_period[periodo]['totales']['sellers_enviadas'] += row.sellers_enviadas
+            data_by_period[periodo]['totales']['sellers_pagadas'] += row.sellers_pagadas
+
+        # Calcular tasa de conversión total por periodo
+        for periodo_data in data_by_period.values():
+            totales = periodo_data['totales']
+            if totales['notificaciones_enviadas'] > 0:
+                totales['tasa_conversion'] = round(
+                    (totales['pagos_desde_notificacion'] * 100.0 / totales['notificaciones_enviadas']),
+                    2
+                )
+            else:
+                totales['tasa_conversion'] = 0
+
+        # Convertir a lista ordenada
+        data = sorted(data_by_period.values(), key=lambda x: x['periodo'])
+
+        return jsonify({'data': data})
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/pendings/comparison', methods=['GET'])
+def get_pendings_comparison():
+    """
+    Compara notificaciones vs pagos reales en BT_MP_DAS_TAX_EVENTS
+    Para ver cuántos de los que "pagaron desde notificación" realmente completaron el pago fiscal
+    """
+    query = """
+    WITH pagos_desde_notif AS (
+      SELECT
+        FORMAT_TIMESTAMP('%Y-%m', updated_at) as periodo,
+        COUNT(*) as total_pagos_notif,
+        COUNT(DISTINCT user_id) as sellers_pagos_notif
+      FROM `meli-bi-data.SBOX_SBOXMERCH.DIM_PENDINGS`
+      WHERE content_id = 'mp.sellers.generic_pendings.das_payment_pendings'
+        AND event = 'deleted'
+        AND reason IN ('success', 'success_web')
+      GROUP BY periodo
+    ),
+    pagos_reales AS (
+      SELECT
+        FORMAT_DATE('%Y-%m', EVENT_DATE) as periodo,
+        COUNT(*) as total_pagos_reales,
+        COUNT(DISTINCT CUS_CUST_ID) as sellers_pagos_reales
+      FROM `WHOWNER.BT_MP_DAS_TAX_EVENTS`
+      WHERE EVENT_TYPE = 'Payment'
+        AND EVENT_DATE IS NOT NULL
+      GROUP BY periodo
+    )
+    SELECT
+      COALESCE(n.periodo, r.periodo) as periodo,
+      IFNULL(n.total_pagos_notif, 0) as pagos_desde_notif,
+      IFNULL(n.sellers_pagos_notif, 0) as sellers_notif,
+      IFNULL(r.total_pagos_reales, 0) as pagos_reales_tax,
+      IFNULL(r.sellers_pagos_reales, 0) as sellers_tax,
+      ROUND((IFNULL(n.total_pagos_notif, 0) * 100.0 / NULLIF(IFNULL(r.total_pagos_reales, 0), 0)), 2) as pct_notif_vs_real
+    FROM pagos_desde_notif n
+    FULL OUTER JOIN pagos_reales r ON n.periodo = r.periodo
+    WHERE COALESCE(n.periodo, r.periodo) IS NOT NULL
+    ORDER BY periodo
+    """
+
+    try:
+        query_job = client.query(query)
+        results = query_job.result()
+
+        data = []
+        for row in results:
+            data.append({
+                'periodo': row.periodo,
+                'pagos_desde_notif': row.pagos_desde_notif,
+                'sellers_notif': row.sellers_notif,
+                'pagos_reales_tax': row.pagos_reales_tax,
+                'sellers_tax': row.sellers_tax,
+                'pct_notif_vs_real': float(row.pct_notif_vs_real) if row.pct_notif_vs_real else 0
+            })
+
+        return jsonify({'data': data})
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

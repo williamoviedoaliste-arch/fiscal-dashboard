@@ -13,6 +13,8 @@ Dashboard interactivo para visualizar y analizar métricas de emisiones y pagos 
 - **👥 Análisis de Sellers**: Seguimiento de sellers nuevos vs recurrentes
 - **💰 Volumen Monetario**: Visualización del volumen de pagos procesados
 - **🎯 Tasa de Conversión**: Análisis de conversión de emisiones a pagos
+- **🔔 Efectividad de Notificaciones**: Análisis de conversión de notificaciones por criticidad
+- **📊 Comparación Notificaciones vs Pagos Reales**: Cruce de datos entre DIM_PENDINGS y BT_MP_DAS_TAX_EVENTS
 - **💡 Insights Automáticos**: Análisis inteligente con alertas y recomendaciones
 - **📖 Documentación Integrada**: Guía completa dentro del dashboard
 
@@ -138,6 +140,18 @@ fiscal-dashboard/
   - Tasa de conversión
   - Comportamiento de sellers
 
+### Pestaña Notificaciones (Nuevo)
+- Resumen de efectividad de notificaciones
+- Evolución mensual de notificaciones por criticidad (C3, C4)
+- Tasa de conversión por criticidad
+- Comparación entre pagos desde notificación vs pagos reales en sistema fiscal
+- Análisis de:
+  - Notificaciones enviadas
+  - Pagos realizados directamente desde notificación
+  - Notificaciones descartadas (manual o sistema)
+  - Notificaciones aún pendientes
+  - Tiempo promedio hasta pago
+
 ### Pestaña Documentación
 - Explicación de conceptos clave
 - Guía de uso del dashboard
@@ -146,12 +160,21 @@ fiscal-dashboard/
 
 ## 📈 Métricas Disponibles
 
+### Métricas de Emisiones y Pagos
 - **Emisiones**: Total de emisiones fiscales exitosas
 - **Pagos**: Total de pagos realizados
 - **Pagos Correctos**: Pagos realizados en el período fiscal correcto
 - **Sellers Únicos**: Cantidad de sellers activos
 - **Conversión**: Ratio de emisiones que resultan en pagos
 - **Volumen**: Monto total procesado en BRL
+
+### Métricas de Notificaciones (Nuevo)
+- **Notificaciones Enviadas**: Total de notificaciones creadas y enviadas a sellers
+- **Pagos desde Notificación**: Sellers que pagaron directamente desde la notificación
+- **Tasa de Conversión de Notificaciones**: % de notificaciones que resultaron en pago directo
+- **Notificaciones por Criticidad**: Análisis separado para C3 y C4
+- **Tiempo hasta Pago**: Días promedio desde notificación hasta pago
+- **Comparación Notif vs Tax**: Correlación entre pagos desde notificación y pagos reales fiscales
 
 ## 🔧 Configuración
 
@@ -169,14 +192,35 @@ REACT_APP_API_URL=http://localhost:5000  # URL del backend
 
 ## 📝 API Endpoints
 
-### GET /api/metrics/monthly
+### Métricas de Emisiones y Pagos
+
+#### GET /api/metrics/monthly
 Retorna métricas agregadas por mes
 
-### GET /api/metrics/sellers
+#### GET /api/metrics/sellers
 Retorna análisis de sellers (nuevos vs recurrentes)
 
-### GET /api/metrics/month/:periodo
+#### GET /api/metrics/month/:periodo
 Retorna métricas detalladas de un mes específico con comparación
+
+### Métricas de Notificaciones (Nuevo)
+
+#### GET /api/pendings/summary
+Retorna resumen general de notificaciones
+- Total enviadas, pagadas desde notificación, descartadas, pendientes
+- Tasa de conversión global
+- Tiempo promedio hasta pago
+
+#### GET /api/pendings/monthly
+Retorna evolución mensual de notificaciones
+- Desglosado por criticidad (C3, C4)
+- Notificaciones enviadas, pagadas, descartadas por período
+- Tasa de conversión por criticidad
+
+#### GET /api/pendings/comparison
+Retorna comparación entre notificaciones y pagos reales
+- Pagos desde notificación vs pagos en BT_MP_DAS_TAX_EVENTS
+- Porcentaje de pagos reales que provienen de notificaciones
 
 ## 🎯 Casos de Uso
 

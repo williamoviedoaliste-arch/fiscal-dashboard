@@ -2,6 +2,7 @@ import React from 'react';
 import Tabs from './Tabs';
 import GeneralTab from './GeneralTab';
 import MonthlyTab from './MonthlyTab';
+import PendingsTab from './PendingsTab';
 import DocumentationTab from './DocumentationTab';
 
 const Dashboard = ({ monthlyData, sellersData }) => {
@@ -19,6 +20,11 @@ const Dashboard = ({ monthlyData, sellersData }) => {
       label: 'Mensual',
       icon: '📅',
       content: <MonthlyTab monthlyData={monthlyData} />
+    },
+    {
+      label: 'Notificaciones',
+      icon: '🔔',
+      content: <PendingsTab />
     },
     {
       label: 'Documentación',
