@@ -1,0 +1,49 @@
+version: '1'
+
+app:
+  name: fiscal-dashboard-api
+  description: Dashboard de Métricas Fiscales DAS - Brasil
+  owner: william.oviedoaliste@mercadolibre.cl
+
+service:
+  type: web
+  framework: python
+  runtime: python39
+
+  build:
+    dockerfile: backend/Dockerfile
+    context: backend
+
+  resources:
+    cpu: 0.5
+    memory: 512Mi
+    instances:
+      min: 1
+      max: 3
+
+  environment:
+    - name: FLASK_ENV
+      value: production
+    - name: GOOGLE_CLOUD_PROJECT
+      value: meli-bi-data
+    - name: PORT
+      value: "8080"
+
+  healthcheck:
+    path: /api/health
+    port: 8080
+    interval: 30s
+    timeout: 5s
+
+  ingress:
+    enabled: true
+    path: /
+    port: 8080
+
+# BigQuery access configuration
+# Nota: Necesitarás configurar un Service Account con permisos a BigQuery
+# y agregarlo como secret en Fury
+secrets:
+  - name: GOOGLE_APPLICATION_CREDENTIALS
+    type: file
+    description: Service Account credentials for BigQuery access
