@@ -1,10 +1,30 @@
-# 📊 Dashboard de Métricas Fiscales
+# 📊 Dashboard de Métricas Fiscales DAS (Brasil)
 
-Dashboard interactivo para visualizar y analizar métricas de emisiones y pagos fiscales, con datos provenientes de BigQuery.
+Dashboard interactivo para visualizar y analizar métricas de **emisiones y pagos fiscales** del sistema DAS (Documento de Arrecadação do Simples Nacional) en Brasil, con datos provenientes de BigQuery.
 
 ![Dashboard Preview](https://img.shields.io/badge/React-18.x-61DAFB?logo=react)
 ![Flask](https://img.shields.io/badge/Flask-3.0-000000?logo=flask)
 ![BigQuery](https://img.shields.io/badge/BigQuery-Enabled-4285F4?logo=google-cloud)
+
+---
+
+## 📚 Documentación Completa
+
+**Base de Conocimiento**: Documentación detallada en [`/docs`](./docs)
+
+| Documento | Descripción | Para Quién |
+|-----------|-------------|------------|
+| [**GUIA_DAS_BRASIL.md**](./docs/GUIA_DAS_BRASIL.md) | Contexto de negocio, qué es DAS, flujo fiscal | Product Managers, Nuevos usuarios |
+| [**DICCIONARIO_TABLAS.md**](./docs/DICCIONARIO_TABLAS.md) | Estructura de tablas BigQuery, campos, ejemplos | Data Analysts, Developers |
+| [**QUERIES_DASHBOARD.md**](./docs/QUERIES_DASHBOARD.md) | Todas las queries SQL del dashboard | Data Analysts, Developers |
+| [**KPIS_PRINCIPALES.md**](./docs/KPIS_PRINCIPALES.md) | 15 KPIs con razonamiento y interpretación | Tax team, Leadership |
+
+**Guías Técnicas**:
+- [QUICKSTART.md](./QUICKSTART.md) - Inicio rápido local
+- [FURY_DEPLOYMENT.md](./FURY_DEPLOYMENT.md) - Deploy en Fury (Meli)
+- [DEPLOYMENT_PROGRESS.md](./DEPLOYMENT_PROGRESS.md) - Estado actual del proyecto
+
+---
 
 ## 🌟 Características
 
@@ -13,8 +33,8 @@ Dashboard interactivo para visualizar y analizar métricas de emisiones y pagos 
 - **👥 Análisis de Sellers**: Seguimiento de sellers nuevos vs recurrentes
 - **💰 Volumen Monetario**: Visualización del volumen de pagos procesados
 - **🎯 Tasa de Conversión**: Análisis de conversión de emisiones a pagos
-- **🔔 Efectividad de Notificaciones**: Análisis de conversión de notificaciones por criticidad
-- **📊 Comparación Notificaciones vs Pagos Reales**: Cruce de datos entre DIM_PENDINGS y BT_MP_DAS_TAX_EVENTS
+- **🔔 Efectividad del Sistema de Pendings**: Análisis de conversión desde pendings de pago
+- **📊 Comparación Pendings vs Pagos Reales**: Cruce de datos entre DIM_PENDINGS y BT_MP_DAS_TAX_EVENTS
 - **💡 Insights Automáticos**: Análisis inteligente con alertas y recomendaciones
 - **📖 Documentación Integrada**: Guía completa dentro del dashboard
 
@@ -102,21 +122,40 @@ Ver guías detalladas:
 
 ```
 fiscal-dashboard/
+├── docs/                              # 📚 Documentación completa
+│   ├── GUIA_DAS_BRASIL.md            # Contexto de negocio
+│   ├── DICCIONARIO_TABLAS.md         # Schema de BigQuery
+│   ├── QUERIES_DASHBOARD.md          # Queries SQL
+│   └── KPIS_PRINCIPALES.md           # KPIs y razonamiento
+│
 ├── backend/
-│   ├── app.py              # API Flask
-│   ├── requirements.txt    # Dependencias Python
-│   ├── Dockerfile          # Container para Cloud Run
+│   ├── app.py                        # API Flask con endpoints
+│   ├── run_server.py                 # Script de inicio
+│   ├── requirements.txt              # Dependencias Python
+│   ├── Dockerfile                    # Container para deployment
 │   └── .dockerignore
+│
 ├── frontend/
 │   ├── src/
-│   │   ├── components/     # Componentes React
-│   │   ├── App.js          # Aplicación principal
-│   │   └── index.css       # Estilos
+│   │   ├── components/               # Componentes React
+│   │   │   ├── Dashboard.jsx         # Dashboard principal
+│   │   │   ├── GeneralTab.jsx        # Vista general
+│   │   │   ├── MonthlyTab.jsx        # Vista mensual
+│   │   │   ├── PendingsTab.jsx       # Uso de Pendings
+│   │   │   ├── PendingsConversionFunnel.jsx  # Funnel 3 etapas
+│   │   │   └── ...
+│   │   ├── App.js                    # Aplicación principal
+│   │   └── index.css                 # Estilos
 │   ├── public/
-│   └── package.json
-├── DEPLOYMENT.md           # Guía de deployment
-├── QUICK-START.md         # Quick start
-└── README.md              # Este archivo
+│   ├── package.json
+│   └── .env.local                    # Config (no versionado)
+│
+├── QUICKSTART.md                      # Inicio rápido local
+├── FURY_DEPLOYMENT.md                 # Deploy en Fury (Meli)
+├── DEPLOYMENT_PROGRESS.md             # Estado actual
+├── fury.yml                           # Config de Fury
+├── start.sh                           # Script de inicio
+└── README.md                          # Este archivo
 ```
 
 ## 🎨 Características del Dashboard
@@ -140,17 +179,22 @@ fiscal-dashboard/
   - Tasa de conversión
   - Comportamiento de sellers
 
-### Pestaña Notificaciones (Nuevo)
-- Resumen de efectividad de notificaciones
-- Evolución mensual de notificaciones por criticidad (C3, C4)
-- Tasa de conversión por criticidad
-- Comparación entre pagos desde notificación vs pagos reales en sistema fiscal
+### Pestaña Uso de Pendings
+- Resumen de efectividad del sistema de pendings
+- **Funnel de Conversión** (3 etapas):
+  1. Pendings creados
+  2. Pagos totales Tax (desde 12/2025)
+  3. Pagos desde pending
+- Evolución mensual de pendings por criticidad
+- Tasa de conversión por nivel de criticidad
+- Comparación entre pagos desde pending vs pagos reales en sistema fiscal
 - Análisis de:
-  - Notificaciones enviadas
-  - Pagos realizados directamente desde notificación
-  - Notificaciones descartadas (manual o sistema)
-  - Notificaciones aún pendientes
-  - Tiempo promedio hasta pago
+  - Pendings creados en DIM_PENDINGS
+  - Pagos realizados después de crear pending
+  - Pendings cerrados (success, dismiss)
+  - Efectividad del sistema (% de pagos atribuibles a pendings)
+
+**⚠️ Nota**: Solo incluye pagos fiscales desde **Diciembre 2025** en adelante
 
 ### Pestaña Documentación
 - Explicación de conceptos clave
@@ -168,13 +212,17 @@ fiscal-dashboard/
 - **Conversión**: Ratio de emisiones que resultan en pagos
 - **Volumen**: Monto total procesado en BRL
 
-### Métricas de Notificaciones (Nuevo)
-- **Notificaciones Enviadas**: Total de notificaciones creadas y enviadas a sellers
-- **Pagos desde Notificación**: Sellers que pagaron directamente desde la notificación
-- **Tasa de Conversión de Notificaciones**: % de notificaciones que resultaron en pago directo
-- **Notificaciones por Criticidad**: Análisis separado para C3 y C4
-- **Tiempo hasta Pago**: Días promedio desde notificación hasta pago
-- **Comparación Notif vs Tax**: Correlación entre pagos desde notificación y pagos reales fiscales
+### Métricas del Sistema de Pendings
+- **Pendings Creados**: Total de pendings de pago DAS creados en el sistema
+- **Pagos desde Pending**: Sellers que pagaron después de crearse el pending
+- **Tasa de Conversión de Pendings**: % de pagos totales atribuibles a pendings (66.31%)
+- **Pendings por Criticidad**: Análisis por nivel de urgencia (HIGH, MEDIUM, LOW)
+- **Tiempo hasta Pago**: Días promedio desde creación de pending hasta pago
+- **Comparación Pendings vs Tax**: Correlación entre pagos desde pending y pagos reales fiscales
+
+**Fuente de Datos**:
+- Pendings: `SBOX_SBOXMERCH.DIM_PENDINGS` (content_id: `mp.sellers.generic_pendings.das_payment_pendings`)
+- Pagos Fiscales: `WHOWNER.BT_MP_DAS_TAX_EVENTS` (EVENT_TYPE: `Payment`)
 
 ## 🔧 Configuración
 
@@ -203,32 +251,42 @@ Retorna análisis de sellers (nuevos vs recurrentes)
 #### GET /api/metrics/month/:periodo
 Retorna métricas detalladas de un mes específico con comparación
 
-### Métricas de Notificaciones (Nuevo)
+### Métricas del Sistema de Pendings
 
 #### GET /api/pendings/summary
-Retorna resumen general de notificaciones
-- Total enviadas, pagadas desde notificación, descartadas, pendientes
-- Tasa de conversión global
-- Tiempo promedio hasta pago
+Retorna resumen general del sistema de pendings
+- Total de pendings creados
+- Pagos totales Tax (desde 12/2025)
+- Pagos desde pending (atribuibles al sistema)
+- Tasa de conversión de pendings (66.31%)
+- Sellers únicos notificados vs que pagaron
+
+**⚠️ Filtro temporal**: Solo incluye pagos donde `YEAR/MONTH >= 12/2025`
 
 #### GET /api/pendings/monthly
-Retorna evolución mensual de notificaciones
-- Desglosado por criticidad (C3, C4)
-- Notificaciones enviadas, pagadas, descartadas por período
-- Tasa de conversión por criticidad
+Retorna evolución mensual de pendings
+- Desglosado por criticidad (HIGH, MEDIUM, LOW)
+- Pendings creados por mes
+- Pagos atribuibles a pendings
+- Tasa de conversión por nivel de criticidad
 
 #### GET /api/pendings/comparison
-Retorna comparación entre notificaciones y pagos reales
-- Pagos desde notificación vs pagos en BT_MP_DAS_TAX_EVENTS
-- Porcentaje de pagos reales que provienen de notificaciones
+Retorna comparación entre pendings y pagos reales fiscales
+- Pagos desde pending vs pagos en BT_MP_DAS_TAX_EVENTS
+- Porcentaje de pagos reales atribuibles a pendings
+- Análisis de efectividad del sistema
 
 ## 🎯 Casos de Uso
 
-1. **Análisis de Tendencias**: Identificar patrones en emisiones y pagos
-2. **Monitoreo de Conversión**: Seguimiento de la tasa de conversión
-3. **Análisis de Sellers**: Evaluar retención y adquisición
-4. **Reporting Ejecutivo**: Dashboards para stakeholders
-5. **Alertas Tempranas**: Identificar caídas o anomalías
+1. **Análisis de Tendencias**: Identificar patrones en emisiones y pagos fiscales
+2. **Monitoreo de Compliance**: Seguimiento de la tasa de conversión emisión → pago
+3. **Análisis de Sellers**: Evaluar retención y adquisición de sellers activos
+4. **Efectividad de Pendings**: Medir impacto del sistema de pendings en compliance
+5. **Reporting Ejecutivo**: Dashboards para stakeholders (Tax, Product, Leadership)
+6. **Alertas Tempranas**: Identificar caídas en conversión o anomalías en pagos
+7. **Optimización de Producto**: Datos para mejorar UX del sistema de pendings
+
+**Ver casos de uso detallados en**: [KPIS_PRINCIPALES.md](./docs/KPIS_PRINCIPALES.md)
 
 ## 💰 Costos Estimados
 
@@ -258,12 +316,66 @@ Este proyecto fue desarrollado con asistencia de Claude (Anthropic).
 - Google Cloud por la infraestructura
 - Vercel por el hosting del frontend
 
-## 📞 Soporte
+## 📞 Soporte y Recursos
 
-Para preguntas o soporte:
-- Consulta la [Documentación](./DEPLOYMENT.md)
-- Revisa los Issues en GitHub
+### Documentación
+- 📘 [Guía DAS Brasil](./docs/GUIA_DAS_BRASIL.md) - Contexto de negocio
+- 📋 [Diccionario de Tablas](./docs/DICCIONARIO_TABLAS.md) - Schema BigQuery
+- 🔍 [Queries del Dashboard](./docs/QUERIES_DASHBOARD.md) - Todas las queries SQL
+- 📈 [KPIs Principales](./docs/KPIS_PRINCIPALES.md) - Métricas y razonamiento
+
+### Guías Técnicas
+- [Quickstart](./QUICKSTART.md) - Inicio rápido local
+- [Fury Deployment](./FURY_DEPLOYMENT.md) - Deploy en Fury
+- [Deployment Progress](./DEPLOYMENT_PROGRESS.md) - Estado del proyecto
+
+### Contacto
+- **Owner**: william.oviedoaliste@mercadolibre.cl
+- **Repo**: https://github.com/williamoviedoaliste-arch/fiscal-dashboard
+
+---
+
+## 🔑 Conceptos Clave
+
+### Términos de Negocio
+- **DAS**: Documento de Arrecadação do Simples Nacional (impuesto unificado Brasil)
+- **SERPRO**: Sistema federal que genera las emisiones fiscales
+- **Pendings**: Sistema de Mercado Libre para alertar a sellers sobre acciones pendientes
+- **Tasa de Conversión**: Emisiones fiscales que resultan en pago
+- **Tasa de Conversión de Pendings**: Pagos atribuibles al sistema de pendings (66.31%)
+
+### Conceptos Técnicos Críticos
+
+**⚠️ Diferencia entre EVENT_DATE y MONTH/YEAR**:
+
+La tabla `BT_MP_DAS_TAX_EVENTS` tiene **dos tipos de fechas**:
+
+1. **`EVENT_DATE`** (DATE): Cuándo **ocurre realmente** el evento
+   - Fecha en que se ejecuta el Payment o Emission
+   - Ejemplo: `EVENT_DATE = '2026-02-18'` → Pago realizado el 18 de febrero
+
+2. **`MONTH` / `YEAR`** (STRING): Período fiscal al que **corresponde**
+   - El mes/año que se está pagando o emitiendo
+   - Ejemplo: `MONTH = '01', YEAR = '2026'` → Pagando el DAS de enero 2026
+
+**Ejemplo Real**:
+```sql
+-- Seller pagó el DAS de Enero 2026 el día 18 de Febrero
+EVENT_TYPE = 'Payment'
+EVENT_DATE = '2026-02-18'  ← Cuándo pagó
+MONTH = '01'                ← Mes fiscal que está pagando
+YEAR = '2026'               ← Año fiscal
+TAX_PERIOD = '2026-01'      ← Período fiscal
+```
+
+**Implicación**: Un pago del período "Enero 2026" (`MONTH='01'`) puede tener `EVENT_DATE` en febrero porque se paga después del cierre del mes.
+
+---
+
+Ver glosario completo en [GUIA_DAS_BRASIL.md](./docs/GUIA_DAS_BRASIL.md)
 
 ---
 
 🤖 Generado con [Claude Code](https://claude.com/claude-code)
+📊 Proyecto: Fiscal Dashboard - Métricas DAS Brasil
+📅 Última actualización: 2026-02-11
