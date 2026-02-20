@@ -41,9 +41,8 @@ service:
     port: 8080
 
 # BigQuery access configuration
-# Nota: Necesitarás configurar un Service Account con permisos a BigQuery
-# y agregarlo como secret en Fury
+# Credenciales del Service Account en base64 como variable de entorno
 secrets:
-  - name: GOOGLE_APPLICATION_CREDENTIALS
-    type: file
-    description: Service Account credentials for BigQuery access
+  - name: GOOGLE_CREDENTIALS_B64
+    type: env_var
+    description: Service Account credentials encoded in base64 for BigQuery access

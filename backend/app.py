@@ -1,14 +1,28 @@
 from flask import Flask, jsonify
 from flask_cors import CORS
 from google.cloud import bigquery
+from google.oauth2 import service_account
 import os
+import json
+import base64
 from datetime import datetime
 
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 # Inicializar cliente de BigQuery
-client = bigquery.Client()
+# En producción usa GOOGLE_CREDENTIALS_B64 (service account en base64)
+# En local usa Application Default Credentials (gcloud auth)
+_creds_b64 = os.environ.get('GOOGLE_CREDENTIALS_B64')
+if _creds_b64:
+    _creds_json = json.loads(base64.b64decode(_creds_b64).decode('utf-8'))
+    _credentials = service_account.Credentials.from_service_account_info(
+        _creds_json,
+        scopes=['https://www.googleapis.com/auth/bigquery']
+    )
+    client = bigquery.Client(credentials=_credentials, project='meli-bi-data')
+else:
+    client = bigquery.Client()
 
 @app.route('/api/health', methods=['GET'])
 def health():
