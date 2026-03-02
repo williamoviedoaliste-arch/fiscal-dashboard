@@ -21,8 +21,6 @@ Dashboard interactivo para visualizar y analizar métricas de **emisiones y pago
 
 **Guías Técnicas**:
 - [QUICKSTART.md](./QUICKSTART.md) - Inicio rápido local
-- [FURY_DEPLOYMENT.md](./FURY_DEPLOYMENT.md) - Deploy en Fury (Meli)
-- [DEPLOYMENT_PROGRESS.md](./DEPLOYMENT_PROGRESS.md) - Estado actual del proyecto
 
 ---
 
@@ -98,26 +96,6 @@ npm start
 
 El frontend estará disponible en `http://localhost:3000`
 
-## 🌐 Deployment en Producción
-
-### Opción Rápida (10 minutos)
-
-```bash
-./deploy-quick-start.sh
-```
-
-### Manual
-
-Ver guías detalladas:
-- **Quick Start**: [QUICK-START.md](./QUICK-START.md)
-- **Deployment Completo**: [DEPLOYMENT.md](./DEPLOYMENT.md)
-
-### Arquitectura de Producción
-
-- **Backend**: Google Cloud Run
-- **Frontend**: Vercel
-- **Base de Datos**: BigQuery
-
 ## 📊 Estructura del Proyecto
 
 ```
@@ -151,9 +129,6 @@ fiscal-dashboard/
 │   └── .env.local                    # Config (no versionado)
 │
 ├── QUICKSTART.md                      # Inicio rápido local
-├── FURY_DEPLOYMENT.md                 # Deploy en Fury (Meli)
-├── DEPLOYMENT_PROGRESS.md             # Estado actual
-├── fury.yml                           # Config de Fury
 ├── start.sh                           # Script de inicio
 └── README.md                          # Este archivo
 ```
@@ -288,14 +263,6 @@ Retorna comparación entre pendings y pagos reales fiscales
 
 **Ver casos de uso detallados en**: [KPIS_PRINCIPALES.md](./docs/KPIS_PRINCIPALES.md)
 
-## 💰 Costos Estimados
-
-- **Google Cloud Run**: $0-5/mes (gratis hasta 2M requests)
-- **Vercel**: $0 (plan Hobby)
-- **BigQuery**: Gratis (primer 1TB queries/mes)
-
-**Total: ~$0-5 USD/mes** para uso normal
-
 ## 🤝 Contribuciones
 
 Las contribuciones son bienvenidas. Por favor:
@@ -306,15 +273,10 @@ Las contribuciones son bienvenidas. Por favor:
 4. Push a la rama (`git push origin feature/AmazingFeature`)
 5. Abre un Pull Request
 
-## 📄 Licencia
-
-Este proyecto fue desarrollado con asistencia de Claude (Anthropic).
-
 ## 🙏 Agradecimientos
 
 - Recharts por la librería de visualización
 - Google Cloud por la infraestructura
-- Vercel por el hosting del frontend
 
 ## 📞 Soporte y Recursos
 
@@ -326,8 +288,6 @@ Este proyecto fue desarrollado con asistencia de Claude (Anthropic).
 
 ### Guías Técnicas
 - [Quickstart](./QUICKSTART.md) - Inicio rápido local
-- [Fury Deployment](./FURY_DEPLOYMENT.md) - Deploy en Fury
-- [Deployment Progress](./DEPLOYMENT_PROGRESS.md) - Estado del proyecto
 
 ### Contacto
 - **Owner**: william.oviedoaliste@mercadolibre.cl
@@ -340,7 +300,7 @@ Este proyecto fue desarrollado con asistencia de Claude (Anthropic).
 ### Términos de Negocio
 - **DAS**: Documento de Arrecadação do Simples Nacional (impuesto unificado Brasil)
 - **SERPRO**: Sistema federal que genera las emisiones fiscales
-- **Pendings**: Sistema de Mercado Libre para alertar a sellers sobre acciones pendientes
+- **Pendings**: Sistema de Mercado Pago para alertar a sellers sobre acciones pendientes
 - **Tasa de Conversión**: Emisiones fiscales que resultan en pago
 - **Tasa de Conversión de Pendings**: Pagos atribuibles al sistema de pendings (66.31%)
 
@@ -376,6 +336,5 @@ Ver glosario completo en [GUIA_DAS_BRASIL.md](./docs/GUIA_DAS_BRASIL.md)
 
 ---
 
-🤖 Generado con [Claude Code](https://claude.com/claude-code)
 📊 Proyecto: Fiscal Dashboard - Métricas DAS Brasil
 📅 Última actualización: 2026-02-11

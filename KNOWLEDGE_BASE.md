@@ -13,9 +13,8 @@
 5. [Cómo Usar el Dashboard](#cómo-usar-el-dashboard)
 6. [Cómo Hacer Consultas Personalizadas](#cómo-hacer-consultas-personalizadas)
 7. [Agregar Nuevas Métricas](#agregar-nuevas-métricas)
-8. [Deployment](#deployment)
-9. [Troubleshooting](#troubleshooting)
-10. [FAQs](#faqs)
+8. [Troubleshooting](#troubleshooting)
+9. [FAQs](#faqs)
 
 ---
 
@@ -522,39 +521,6 @@ pkill -f "react-scripts start"
 
 ---
 
-## 🚀 Deployment
-
-### Opción 1: Local (Para Testing)
-```bash
-./start.sh
-```
-- Backend: http://localhost:5000
-- Frontend: http://localhost:3000
-
-### Opción 2: Google Cloud Run (Recomendado)
-```bash
-./deploy-backend.sh
-```
-- Te dará una URL pública compartible
-- Autoescalado incluido
-- Solo deploy del backend (frontend se corre local)
-
-### Opción 3: Fury (Meli Internal Platform)
-
-**⚠️ Requiere**:
-- Acceso a un proyecto en Fury
-- Service Account configurado
-
-**Pasos**:
-1. Contactar admin de Fury para acceso
-2. `fury install` (actualizar plugins)
-3. `fury create-version`
-4. Configurar Service Account en Fury Web UI
-
-Ver guía completa: [FURY_DEPLOYMENT.md](FURY_DEPLOYMENT.md)
-
----
-
 ## 🔧 Troubleshooting
 
 ### Backend no inicia
@@ -689,13 +655,12 @@ Cambiar `>= 12` por el mes deseado.
 
 ### ¿Cómo agregar autenticación?
 
-**R**: Los componentes ya están creados pero desactivados. Ver guía:
-[GOOGLE_OAUTH_SETUP.md](GOOGLE_OAUTH_SETUP.md)
+**R**: Los componentes ya están creados (`AuthWrapper.jsx`, `Login.jsx`).
 
 **Pasos resumidos**:
 1. Crear OAuth Client ID en Google Cloud Console
-2. Configurar en `frontend/.env.local`
-3. Descomentar/activar `AuthWrapper` y `Login` componentes
+2. Configurar `REACT_APP_GOOGLE_CLIENT_ID` en `frontend/.env.local`
+3. Activar `AuthWrapper` en `App.js`
 
 ---
 
@@ -784,9 +749,6 @@ GROUP BY EVENT_TYPE;
 ### Documentos del Proyecto
 - [README.md](README.md) - Overview general
 - [QUICKSTART.md](QUICKSTART.md) - Inicio rápido
-- [FURY_DEPLOYMENT.md](FURY_DEPLOYMENT.md) - Deploy en Fury
-- [GOOGLE_OAUTH_SETUP.md](GOOGLE_OAUTH_SETUP.md) - Configurar OAuth
-- [DEPLOYMENT_PROGRESS.md](DEPLOYMENT_PROGRESS.md) - Estado actual del proyecto
 
 ### BigQuery
 - [Documentación de BigQuery](https://cloud.google.com/bigquery/docs)
@@ -824,7 +786,6 @@ GROUP BY EVENT_TYPE;
 
 - **Owner**: william.oviedoaliste@mercadolibre.cl
 - **Repo**: https://github.com/williamoviedoaliste-arch/fiscal-dashboard
-- **Fury Admin**: Ramiro Paz (para acceso a Fury)
 
 ---
 
@@ -835,7 +796,6 @@ GROUP BY EVENT_TYPE;
 - ✅ Integración BigQuery
 - ✅ Funnel de conversión de Pendings
 - ✅ Filtro temporal desde 12/2025
-- ✅ Deployment scripts (Cloud Run, Fury)
 
 ---
 

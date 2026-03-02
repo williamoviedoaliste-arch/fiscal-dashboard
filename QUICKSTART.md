@@ -123,4 +123,4 @@ kill -9 <PID>
 
 - **[README.md](README.md)** - Documentación general del proyecto
 - **[DOCUMENTACION_METRICAS.md](DOCUMENTACION_METRICAS.md)** - Guía técnica completa con fórmulas y cálculos detallados
-- **[PESTANAS.md](PESTANAS.md)** - Explicación detallada de cada pestaña del dashboard
+- **[KNOWLEDGE_BASE.md](KNOWLEDGE_BASE.md)** - Base de conocimiento, FAQs y guía para extender el dashboard

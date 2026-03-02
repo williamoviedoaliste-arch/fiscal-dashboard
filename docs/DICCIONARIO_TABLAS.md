@@ -284,7 +284,7 @@ WHERE YEAR = '2025'
 
 **Nombre Completo**: `SBOX_SBOXMERCH.DIM_PENDINGS`
 
-**Propósito**: Almacena todos los pendings (puntos de awareness en la home del seller) enviados a usuarios de Mercado Libre/Pago.
+**Propósito**: Almacena todos los pendings (puntos de awareness en la home del seller) enviados a usuarios de Mercado Pago.
 
 **Dueño**: SBOX_SBOXMERCH (Sandbox Merchant Team)
 

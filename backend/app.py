@@ -24,6 +24,10 @@ if _creds_b64:
 else:
     client = bigquery.Client()
 
+@app.route('/ping', methods=['GET'])
+def ping():
+    return jsonify({'status': 'ok'})
+
 @app.route('/api/health', methods=['GET'])
 def health():
     return jsonify({'status': 'ok', 'timestamp': datetime.now().isoformat()})
