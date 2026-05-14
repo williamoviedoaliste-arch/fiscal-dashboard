@@ -73,6 +73,14 @@ function PendingsEvolutionChart({ data }) {
             strokeDasharray="5 5"
             dot={{ r: 4 }}
           />
+          <Line
+            type="monotone"
+            dataKey="pagos_from_value"
+            name="Pagos vía Pending (FROM_VALUE)"
+            stroke="#0ea5e9"
+            strokeWidth={2}
+            dot={{ r: 4 }}
+          />
         </LineChart>
       </ResponsiveContainer>
       <div style={{
@@ -83,7 +91,9 @@ function PendingsEvolutionChart({ data }) {
         fontSize: '12px',
         color: '#6b7280'
       }}>
-        <strong>Nota:</strong> Línea punteada (Pagos Reales) representa todos los pagos fiscales registrados en BT_MP_DAS_TAX_EVENTS. La diferencia con "Pagos desde Notificación" muestra cuántos pagos se realizaron sin usar las notificaciones.
+        <strong>Nota:</strong> "Pagos Reales (Tax)" son todos los pagos en BT_MP_DAS_TAX_EVENTS.
+        "Pagos vía Pending (FROM_VALUE)" son los que tienen FROM_VALUE="pending" en esa misma tabla — medición directa del canal pending.
+        "Pagos desde Notificación" es la medición de DIM_PENDINGS (event=deleted, reason=success).
       </div>
     </div>
   );

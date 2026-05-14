@@ -51,6 +51,20 @@ function PendingsSummaryCards({ data }) {
       subtitle: 'Notif → Tax',
       color: '#ec4899',
       tooltip: 'Porcentaje de pagos reales que provienen de notificaciones = (Pagos desde Notif / Pagos Totales Tax) × 100'
+    },
+    {
+      title: 'Pagos vía Pending (TAX)',
+      value: formatNumber(data.total_pagos_from_value || 0),
+      subtitle: `${formatNumber(data.sellers_pagos_from_value || 0)} sellers`,
+      color: '#0ea5e9',
+      tooltip: 'Pagos registrados en BT_MP_DAS_TAX_EVENTS con FROM_VALUE="pending". Mide directamente los pagos que pasaron por el flujo de pending en la tabla de eventos fiscales.'
+    },
+    {
+      title: '% Pagos vía Pending (TAX)',
+      value: `${data.tasa_from_value || 0}%`,
+      subtitle: 'FROM_VALUE = pending',
+      color: '#06b6d4',
+      tooltip: 'Porcentaje de los pagos totales en BT_MP_DAS_TAX_EVENTS que tienen FROM_VALUE="pending" = (Pagos FROM_VALUE / Pagos Totales) × 100'
     }
   ];
 

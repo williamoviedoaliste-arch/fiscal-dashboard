@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import InfoTooltip from './InfoTooltip';
+import MonthlyMTDChart from './MonthlyMTDChart';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
@@ -103,6 +104,9 @@ const MonthlyTab = ({ monthlyData }) => {
           </label>
         </div>
       </div>
+
+      {/* Gráfico MTD — siempre visible, independiente del mes seleccionado */}
+      <MonthlyMTDChart />
 
       {loading && <div className="loading">Cargando datos...</div>}
       {error && <div className="error">{error}</div>}
@@ -481,13 +485,13 @@ const MonthlyTab = ({ monthlyData }) => {
                         {monthDetail.variaciones.sellers_emiten_pct !== null && monthDetail.variaciones.sellers_pagan_pct !== null && (
                           <>
                             {monthDetail.variaciones.sellers_emiten_pct > monthDetail.variaciones.sellers_pagan_pct + 20 && (
-                              <span>⚠️ Los sellers emiten más ({monthDetail.variaciones.sellers_emiten_pct.toFixed(1)}%) pero pagan menos ({monthDetail.variaciones.sellers_pagan_pct.toFixed(1)}%). Brecha de conversión creciente.</span>
+                              <span>⚠️ Más sellers generaron su boleto DAS ({monthDetail.variaciones.sellers_emiten_pct.toFixed(1)}%) pero los que efectivamente pagaron crecieron menos ({monthDetail.variaciones.sellers_pagan_pct.toFixed(1)}%). La brecha entre declarar y pagar se está ampliando.</span>
                             )}
                             {monthDetail.variaciones.sellers_pagan_pct > monthDetail.variaciones.sellers_emiten_pct && (
-                              <span>🎯 Sellers pagando crecen más rápido ({monthDetail.variaciones.sellers_pagan_pct.toFixed(1)}%) que los que emiten ({monthDetail.variaciones.sellers_emiten_pct.toFixed(1)}%). Excelente monetización.</span>
+                              <span>🎯 Los sellers que pagaron crecieron más ({monthDetail.variaciones.sellers_pagan_pct.toFixed(1)}%) que los que solo generaron boleto ({monthDetail.variaciones.sellers_emiten_pct.toFixed(1)}%). Cada vez más sellers completan el ciclo completo: emiten y pagan.</span>
                             )}
                             {Math.abs(monthDetail.variaciones.sellers_emiten_pct - monthDetail.variaciones.sellers_pagan_pct) <= 20 && (
-                              <span>✅ Crecimiento balanceado entre sellers que emiten ({monthDetail.variaciones.sellers_emiten_pct.toFixed(1)}%) y pagan ({monthDetail.variaciones.sellers_pagan_pct.toFixed(1)}%).</span>
+                              <span>✅ Los sellers que generaron boleto ({monthDetail.variaciones.sellers_emiten_pct.toFixed(1)}%) y los que pagaron ({monthDetail.variaciones.sellers_pagan_pct.toFixed(1)}%) crecen al mismo ritmo. Sin brecha relevante entre declarar y pagar.</span>
                             )}
                           </>
                         )}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import PendingsSummaryCards from './PendingsSummaryCards';
-import PendingsConversionFunnel from './PendingsConversionFunnel';
+import PendingsMonthlyTable from './PendingsMonthlyTable';
 import PendingsEvolutionChart from './PendingsEvolutionChart';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
@@ -20,22 +20,19 @@ function PendingsTab() {
     setError(null);
 
     try {
-      // Fetch summary
-      const summaryResponse = await fetch(`${API_URL}/api/pendings/summary`);
-      if (!summaryResponse.ok) {
-        throw new Error('Error al cargar resumen de notificaciones');
-      }
-      const summaryJson = await summaryResponse.json();
+      const [summaryResponse, monthlyResponse] = await Promise.all([
+        fetch(`${API_URL}/api/pendings/summary`),
+        fetch(`${API_URL}/api/pendings/monthly`),
+      ]);
+      if (!summaryResponse.ok) throw new Error('Error al cargar resumen de notificaciones');
+      if (!monthlyResponse.ok) throw new Error('Error al cargar datos mensuales');
+
+      const [summaryJson, monthlyJson] = await Promise.all([
+        summaryResponse.json(),
+        monthlyResponse.json(),
+      ]);
       setSummaryData(summaryJson);
-
-      // Fetch monthly
-      const monthlyResponse = await fetch(`${API_URL}/api/pendings/monthly`);
-      if (!monthlyResponse.ok) {
-        throw new Error('Error al cargar datos mensuales');
-      }
-      const monthlyJson = await monthlyResponse.json();
       setMonthlyData(monthlyJson.data);
-
     } catch (err) {
       setError(err.message);
     } finally {
@@ -99,8 +96,8 @@ function PendingsTab() {
       {/* Summary Cards */}
       <PendingsSummaryCards data={summaryData} />
 
-      {/* Funnel de Conversión */}
-      <PendingsConversionFunnel data={summaryData} />
+      {/* Tabla mensual de conversión */}
+      <PendingsMonthlyTable />
 
       {/* Gráfico de evolución mensual */}
       <div style={{
@@ -130,8 +127,9 @@ function PendingsTab() {
             la notificación vs sistema que la removió (por expiración o pago externo).
           </li>
           <li>
-            <strong>Correlación Individual:</strong> No hay clave directa que une una notificación específica
-            con un pago en BT_MP_DAS_TAX_EVENTS. El análisis es agregado por período.
+            <strong>Dos fuentes de medición:</strong> DIM_PENDINGS mide interacción con la notificación (event=deleted, reason=success).
+            FROM_VALUE="pending" en BT_MP_DAS_TAX_EVENTS mide directamente el origen del pago fiscal.
+            Ambas son válidas pero miden momentos distintos del flujo — pueden diferir en volumen.
           </li>
           <li>
             <strong>Criticidad:</strong> Análisis no desglosado por nivel de criticidad (C3, C4) ya que actualmente

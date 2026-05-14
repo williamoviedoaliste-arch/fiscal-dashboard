@@ -80,6 +80,7 @@ def get_monthly_metrics():
 
       FROM `WHOWNER.BT_MP_DAS_TAX_EVENTS`
       WHERE EVENT_DATE IS NOT NULL
+        AND EVENT_DATE <= CURRENT_DATE()
         AND EVENT_TYPE IN ('SERPRO-Emission', 'Payment')
       GROUP BY anio, mes, periodo
     ),
@@ -179,6 +180,7 @@ def get_sellers_metrics():
         MIN(DATE_TRUNC(EVENT_DATE, MONTH)) as primer_mes_emision
       FROM `WHOWNER.BT_MP_DAS_TAX_EVENTS`
       WHERE EVENT_TYPE = 'SERPRO-Emission' AND SERPRO_STATUS = 'success'
+        AND EVENT_DATE <= CURRENT_DATE()
       GROUP BY CUS_CUST_ID
     )
     SELECT
@@ -192,6 +194,7 @@ def get_sellers_metrics():
     INNER JOIN seller_first_emission f ON e.CUS_CUST_ID = f.CUS_CUST_ID
     WHERE e.EVENT_TYPE = 'SERPRO-Emission' AND e.SERPRO_STATUS = 'success'
       AND e.EVENT_DATE IS NOT NULL
+      AND e.EVENT_DATE <= CURRENT_DATE()
     GROUP BY periodo
     ORDER BY periodo ASC
     """
@@ -204,6 +207,7 @@ def get_sellers_metrics():
         MIN(DATE_TRUNC(EVENT_DATE, MONTH)) as primer_mes_pago
       FROM `WHOWNER.BT_MP_DAS_TAX_EVENTS`
       WHERE EVENT_TYPE = 'Payment'
+        AND EVENT_DATE <= CURRENT_DATE()
       GROUP BY CUS_CUST_ID
     )
     SELECT
@@ -217,6 +221,7 @@ def get_sellers_metrics():
     INNER JOIN seller_first_payment f ON e.CUS_CUST_ID = f.CUS_CUST_ID
     WHERE e.EVENT_TYPE = 'Payment'
       AND e.EVENT_DATE IS NOT NULL
+      AND e.EVENT_DATE <= CURRENT_DATE()
     GROUP BY periodo
     ORDER BY periodo ASC
     """
@@ -266,12 +271,131 @@ def get_sellers_metrics():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/metrics/sellers/recurrence', methods=['GET'])
+def get_sellers_recurrence():
+    """Métricas de recurrencia de sellers: totalmente nuevos, recurrentes (mes anterior + actual), sin recurrencia"""
+
+    query_emisiones = """
+    WITH seller_first_emission AS (
+      SELECT CUS_CUST_ID,
+        MIN(DATE_TRUNC(EVENT_DATE, MONTH)) as primer_mes_emision
+      FROM `WHOWNER.BT_MP_DAS_TAX_EVENTS`
+      WHERE EVENT_TYPE = 'SERPRO-Emission' AND SERPRO_STATUS = 'success'
+        AND EVENT_DATE <= CURRENT_DATE()
+      GROUP BY CUS_CUST_ID
+    ),
+    monthly_emissions AS (
+      SELECT DISTINCT
+        DATE_TRUNC(EVENT_DATE, MONTH) as mes,
+        CUS_CUST_ID
+      FROM `WHOWNER.BT_MP_DAS_TAX_EVENTS`
+      WHERE EVENT_TYPE = 'SERPRO-Emission' AND SERPRO_STATUS = 'success'
+        AND EVENT_DATE IS NOT NULL AND EVENT_DATE <= CURRENT_DATE()
+    )
+    SELECT
+      FORMAT_DATE('%Y-%m', m.mes) as periodo,
+      COUNT(DISTINCT m.CUS_CUST_ID) as sellers_total,
+      COUNT(DISTINCT CASE WHEN m.mes = f.primer_mes_emision
+        THEN m.CUS_CUST_ID END) as sellers_totalmente_nuevos,
+      COUNT(DISTINCT CASE
+        WHEN m.mes != f.primer_mes_emision AND prev.CUS_CUST_ID IS NOT NULL
+        THEN m.CUS_CUST_ID END) as sellers_recurrentes,
+      COUNT(DISTINCT CASE
+        WHEN m.mes != f.primer_mes_emision AND prev.CUS_CUST_ID IS NULL
+        THEN m.CUS_CUST_ID END) as sellers_sin_recurrencia
+    FROM monthly_emissions m
+    INNER JOIN seller_first_emission f ON m.CUS_CUST_ID = f.CUS_CUST_ID
+    LEFT JOIN monthly_emissions prev
+      ON m.CUS_CUST_ID = prev.CUS_CUST_ID
+      AND prev.mes = DATE_SUB(m.mes, INTERVAL 1 MONTH)
+    GROUP BY periodo
+    ORDER BY periodo ASC
+    """
+
+    query_pagos = """
+    WITH seller_first_payment AS (
+      SELECT CUS_CUST_ID,
+        MIN(DATE_TRUNC(EVENT_DATE, MONTH)) as primer_mes_pago
+      FROM `WHOWNER.BT_MP_DAS_TAX_EVENTS`
+      WHERE EVENT_TYPE = 'Payment'
+        AND EVENT_DATE <= CURRENT_DATE()
+      GROUP BY CUS_CUST_ID
+    ),
+    monthly_payments AS (
+      SELECT DISTINCT
+        DATE_TRUNC(EVENT_DATE, MONTH) as mes,
+        CUS_CUST_ID
+      FROM `WHOWNER.BT_MP_DAS_TAX_EVENTS`
+      WHERE EVENT_TYPE = 'Payment'
+        AND EVENT_DATE IS NOT NULL AND EVENT_DATE <= CURRENT_DATE()
+    )
+    SELECT
+      FORMAT_DATE('%Y-%m', m.mes) as periodo,
+      COUNT(DISTINCT m.CUS_CUST_ID) as sellers_total,
+      COUNT(DISTINCT CASE WHEN m.mes = f.primer_mes_pago
+        THEN m.CUS_CUST_ID END) as sellers_totalmente_nuevos,
+      COUNT(DISTINCT CASE
+        WHEN m.mes != f.primer_mes_pago AND prev.CUS_CUST_ID IS NOT NULL
+        THEN m.CUS_CUST_ID END) as sellers_recurrentes,
+      COUNT(DISTINCT CASE
+        WHEN m.mes != f.primer_mes_pago AND prev.CUS_CUST_ID IS NULL
+        THEN m.CUS_CUST_ID END) as sellers_sin_recurrencia
+    FROM monthly_payments m
+    INNER JOIN seller_first_payment f ON m.CUS_CUST_ID = f.CUS_CUST_ID
+    LEFT JOIN monthly_payments prev
+      ON m.CUS_CUST_ID = prev.CUS_CUST_ID
+      AND prev.mes = DATE_SUB(m.mes, INTERVAL 1 MONTH)
+    GROUP BY periodo
+    ORDER BY periodo ASC
+    """
+
+    try:
+        emisiones_job = client.query(query_emisiones)
+        pagos_job = client.query(query_pagos)
+
+        emisiones_results = list(emisiones_job.result())
+        pagos_results = list(pagos_job.result())
+
+        emisiones_dict = {row.periodo: row for row in emisiones_results}
+        pagos_dict = {row.periodo: row for row in pagos_results}
+
+        periodos = sorted(set(emisiones_dict.keys()) | set(pagos_dict.keys()))
+
+        data = []
+        for periodo in periodos:
+            e = emisiones_dict.get(periodo)
+            p = pagos_dict.get(periodo)
+
+            data.append({
+                'periodo': periodo,
+                'emisiones': {
+                    'total': e.sellers_total if e else 0,
+                    'totalmente_nuevos': e.sellers_totalmente_nuevos if e else 0,
+                    'recurrentes': e.sellers_recurrentes if e else 0,
+                    'sin_recurrencia': e.sellers_sin_recurrencia if e else 0,
+                },
+                'pagos': {
+                    'total': p.sellers_total if p else 0,
+                    'totalmente_nuevos': p.sellers_totalmente_nuevos if p else 0,
+                    'recurrentes': p.sellers_recurrentes if p else 0,
+                    'sin_recurrencia': p.sellers_sin_recurrencia if p else 0,
+                }
+            })
+
+        return jsonify({'data': data})
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/metrics/month/<periodo>', methods=['GET'])
 def get_month_detail(periodo):
     """
-    Obtiene métricas detalladas de un mes específico con comparación vs período anterior
+    Obtiene métricas detalladas de un mes específico con comparación vs período anterior.
+    Usa una sola query BigQuery (con ARRAY_AGG para top_periodos) para minimizar jobs.
     periodo formato: YYYY-MM
     """
+    import time
     from flask import request
     from datetime import datetime
     from dateutil.relativedelta import relativedelta
@@ -283,96 +407,110 @@ def get_month_detail(periodo):
         current_date = datetime.strptime(periodo, '%Y-%m')
         previous_date = current_date - relativedelta(months=1)
         periodo_anterior = previous_date.strftime('%Y-%m')
-    except:
+    except Exception:
         periodo_anterior = None
 
-    # Función helper para construir query
-    def build_query(target_periodo, tipo_filtro):
+    def build_combined_query(cur, prev, tipo_filtro):
+        """Una sola query que obtiene métricas de current + previous + top_periodos."""
         if tipo_filtro == 'fiscal':
-            return f"""
-            WITH month_data AS (
-              SELECT
-                EVENT_TYPE,
-                SERPRO_STATUS,
-                CUS_CUST_ID,
-                TOTAL_AMOUNT,
-                CONCAT(YEAR, '-', LPAD(CAST(MONTH AS STRING), 2, '0')) as periodo_fiscal,
-                EVENT_DATE
-              FROM `WHOWNER.BT_MP_DAS_TAX_EVENTS`
-              WHERE CONCAT(YEAR, '-', LPAD(CAST(MONTH AS STRING), 2, '0')) = '{target_periodo}'
-            )
-            SELECT
-              COUNT(DISTINCT CASE WHEN EVENT_TYPE = 'SERPRO-Emission' AND SERPRO_STATUS = 'success'
-                THEN CUS_CUST_ID END) as sellers_emitieron,
-              COUNT(DISTINCT CASE WHEN EVENT_TYPE = 'Payment'
-                THEN CUS_CUST_ID END) as sellers_pagaron,
-              COUNTIF(EVENT_TYPE = 'SERPRO-Emission' AND SERPRO_STATUS = 'success') as cantidad_emisiones,
-              COUNTIF(EVENT_TYPE = 'Payment') as cantidad_pagos,
-              COUNTIF(EVENT_TYPE = 'SERPRO-Emission' AND SERPRO_STATUS = 'error') as emisiones_error,
-              COUNTIF(EVENT_TYPE = 'SERPRO-Emission' AND SERPRO_STATUS = 'already_paid') as emisiones_ya_pagadas,
-              ROUND(SUM(CASE WHEN EVENT_TYPE = 'Payment' THEN TOTAL_AMOUNT ELSE 0 END), 2) as volumen_total,
-              ROUND(AVG(CASE WHEN EVENT_TYPE = 'Payment' THEN TOTAL_AMOUNT END), 2) as ticket_promedio,
-              MIN(EVENT_DATE) as fecha_primera_actividad,
-              MAX(EVENT_DATE) as fecha_ultima_actividad
-            FROM month_data
-            """
+            slot_expr = f"CONCAT(YEAR, '-', LPAD(CAST(MONTH AS STRING), 2, '0'))"
+            filter_clause = f"{slot_expr} IN ('{cur}', '{prev}')"
+            cur_cond = f"{slot_expr} = '{cur}'"
+            prev_cond = f"{slot_expr} = '{prev}'"
         else:
-            return f"""
-            WITH month_data AS (
+            slot_expr = "FORMAT_DATE('%Y-%m', EVENT_DATE)"
+            filter_clause = f"{slot_expr} IN ('{cur}', '{prev}')"
+            cur_cond = f"{slot_expr} = '{cur}'"
+            prev_cond = f"{slot_expr} = '{prev}'"
+
+        top_periodos_cte = ""
+        top_periodos_join = "NULL as top_periodos"
+        if tipo_filtro == 'event':
+            top_periodos_cte = """
+            ,fiscal_groups AS (
               SELECT
-                EVENT_TYPE,
-                SERPRO_STATUS,
-                CUS_CUST_ID,
-                TOTAL_AMOUNT,
-                YEAR,
-                MONTH,
-                EVENT_DATE
-              FROM `WHOWNER.BT_MP_DAS_TAX_EVENTS`
-              WHERE FORMAT_DATE('%Y-%m', EVENT_DATE) = '{target_periodo}'
-            )
-            SELECT
-              COUNT(DISTINCT CASE WHEN EVENT_TYPE = 'SERPRO-Emission' AND SERPRO_STATUS = 'success'
-                THEN CUS_CUST_ID END) as sellers_emitieron,
-              COUNT(DISTINCT CASE WHEN EVENT_TYPE = 'Payment'
-                THEN CUS_CUST_ID END) as sellers_pagaron,
-              COUNTIF(EVENT_TYPE = 'SERPRO-Emission' AND SERPRO_STATUS = 'success') as cantidad_emisiones,
-              COUNTIF(EVENT_TYPE = 'Payment') as cantidad_pagos,
-              COUNTIF(EVENT_TYPE = 'SERPRO-Emission' AND SERPRO_STATUS = 'error') as emisiones_error,
-              COUNTIF(EVENT_TYPE = 'SERPRO-Emission' AND SERPRO_STATUS = 'already_paid') as emisiones_ya_pagadas,
-              ROUND(SUM(CASE WHEN EVENT_TYPE = 'Payment' THEN TOTAL_AMOUNT ELSE 0 END), 2) as volumen_total,
-              ROUND(AVG(CASE WHEN EVENT_TYPE = 'Payment' THEN TOTAL_AMOUNT END), 2) as ticket_promedio,
-              MIN(EVENT_DATE) as fecha_primera_actividad,
-              MAX(EVENT_DATE) as fecha_ultima_actividad
-            FROM month_data
-            """
+                CONCAT(YEAR, '-', LPAD(CAST(MONTH AS STRING), 2, '0')) as periodo_fiscal,
+                COUNTIF(EVENT_TYPE = 'SERPRO-Emission' AND SERPRO_STATUS = 'success') as emisiones,
+                COUNT(DISTINCT CASE WHEN EVENT_TYPE = 'SERPRO-Emission' AND SERPRO_STATUS = 'success'
+                  THEN CUS_CUST_ID END) as sellers
+              FROM base
+              WHERE slot = 'current' AND YEAR IS NOT NULL AND MONTH IS NOT NULL
+              GROUP BY periodo_fiscal
+            ),
+            top_fiscal AS (
+              SELECT ARRAY_AGG(
+                STRUCT(periodo_fiscal, emisiones, sellers)
+                ORDER BY emisiones DESC LIMIT 10
+              ) as top_list
+              FROM fiscal_groups
+            )"""
+            top_periodos_join = "tf.top_list as top_periodos"
+
+        cross_join = "CROSS JOIN top_fiscal tf" if tipo_filtro == 'event' else ""
+
+        return f"""
+        WITH base AS (
+          SELECT
+            EVENT_TYPE, SERPRO_STATUS, CUS_CUST_ID, TOTAL_AMOUNT, YEAR, MONTH, EVENT_DATE,
+            CASE
+              WHEN {cur_cond} THEN 'current'
+              WHEN {prev_cond} THEN 'previous'
+            END as slot
+          FROM `WHOWNER.BT_MP_DAS_TAX_EVENTS`
+          WHERE {filter_clause}
+        ),
+        metrics AS (
+          SELECT
+            slot,
+            COUNT(DISTINCT CASE WHEN EVENT_TYPE = 'SERPRO-Emission' AND SERPRO_STATUS = 'success'
+              THEN CUS_CUST_ID END) as sellers_emitieron,
+            COUNT(DISTINCT CASE WHEN EVENT_TYPE = 'Payment'
+              THEN CUS_CUST_ID END) as sellers_pagaron,
+            COUNTIF(EVENT_TYPE = 'SERPRO-Emission' AND SERPRO_STATUS = 'success') as cantidad_emisiones,
+            COUNTIF(EVENT_TYPE = 'Payment') as cantidad_pagos,
+            COUNTIF(EVENT_TYPE = 'SERPRO-Emission' AND SERPRO_STATUS = 'error') as emisiones_error,
+            COUNTIF(EVENT_TYPE = 'SERPRO-Emission' AND SERPRO_STATUS = 'already_paid') as emisiones_ya_pagadas,
+            ROUND(SUM(CASE WHEN EVENT_TYPE = 'Payment' THEN TOTAL_AMOUNT ELSE 0 END), 2) as volumen_total,
+            ROUND(AVG(CASE WHEN EVENT_TYPE = 'Payment' THEN TOTAL_AMOUNT END), 2) as ticket_promedio,
+            MIN(EVENT_DATE) as fecha_primera_actividad,
+            MAX(EVENT_DATE) as fecha_ultima_actividad
+          FROM base
+          WHERE slot IS NOT NULL
+          GROUP BY slot
+        ){top_periodos_cte}
+        SELECT m.*, {top_periodos_join}
+        FROM metrics m
+        {cross_join}
+        """
+
+    def run_with_retry(query, max_retries=3):
+        for attempt in range(max_retries):
+            try:
+                job = client.query(query)
+                return list(job.result())
+            except Exception as e:
+                is_quota = '403' in str(e) and 'Quota' in str(e)
+                if is_quota and attempt < max_retries - 1:
+                    time.sleep(2 ** attempt)
+                    continue
+                raise
 
     try:
-        # Query para período actual
-        current_query = build_query(periodo, filter_type)
-        current_job = client.query(current_query)
-        current_results = list(current_job.result())
+        query = build_combined_query(periodo, periodo_anterior or '', filter_type)
+        rows = run_with_retry(query)
 
-        if not current_results:
+        current_row = next((r for r in rows if r.slot == 'current'), None)
+        previous_row = next((r for r in rows if r.slot == 'previous'), None)
+
+        if not current_row:
             return jsonify({'error': 'No se encontraron datos para este período'}), 404
 
-        current_row = current_results[0]
-
-        # Query para período anterior (si existe)
-        previous_row = None
-        if periodo_anterior:
-            previous_query = build_query(periodo_anterior, filter_type)
-            previous_job = client.query(previous_query)
-            previous_results = list(previous_job.result())
-            if previous_results:
-                previous_row = previous_results[0]
-
-        # Calcular variaciones porcentuales vs período anterior
-        def calc_variation(current, previous):
-            if previous is None or previous == 0:
+        def calc_variation(cur_val, prev_val):
+            if prev_val is None or prev_val == 0:
                 return None
-            return round(((current - previous) / previous) * 100, 2)
+            return round(((cur_val - prev_val) / prev_val) * 100, 2)
 
-        variaciones = {}
+        variaciones = None
         if previous_row:
             variaciones = {
                 'emisiones_pct': calc_variation(current_row.cantidad_emisiones, previous_row.cantidad_emisiones),
@@ -385,31 +523,15 @@ def get_month_detail(periodo):
                 )
             }
 
-        # Obtener top períodos fiscales del mes (solo para filtro por evento)
         top_periodos = []
-        if filter_type == 'event':
-            top_periodos_query = f"""
-            SELECT
-              CONCAT(YEAR, '-', LPAD(CAST(MONTH AS STRING), 2, '0')) as periodo_fiscal,
-              COUNTIF(EVENT_TYPE = 'SERPRO-Emission' AND SERPRO_STATUS = 'success') as emisiones,
-              COUNT(DISTINCT CASE WHEN EVENT_TYPE = 'SERPRO-Emission' AND SERPRO_STATUS = 'success'
-                THEN CUS_CUST_ID END) as sellers
-            FROM `WHOWNER.BT_MP_DAS_TAX_EVENTS`
-            WHERE FORMAT_DATE('%Y-%m', EVENT_DATE) = '{periodo}'
-              AND YEAR IS NOT NULL AND MONTH IS NOT NULL
-            GROUP BY periodo_fiscal
-            ORDER BY emisiones DESC
-            LIMIT 10
-            """
-            top_periodos_job = client.query(top_periodos_query)
-            for p in top_periodos_job.result():
+        if filter_type == 'event' and current_row.top_periodos:
+            for p in current_row.top_periodos:
                 top_periodos.append({
-                    'periodo_fiscal': p.periodo_fiscal,
-                    'emisiones': p.emisiones,
-                    'sellers': p.sellers
+                    'periodo_fiscal': p.get('periodo_fiscal') if isinstance(p, dict) else p['periodo_fiscal'],
+                    'emisiones': p.get('emisiones') if isinstance(p, dict) else p['emisiones'],
+                    'sellers': p.get('sellers') if isinstance(p, dict) else p['sellers'],
                 })
 
-        # Construir respuesta
         data = {
             'periodo': periodo,
             'periodo_anterior': periodo_anterior,
@@ -436,7 +558,7 @@ def get_month_detail(periodo):
                 'volumen_total': float(previous_row.volumen_total) if previous_row and previous_row.volumen_total else None,
                 'ticket_promedio': float(previous_row.ticket_promedio) if previous_row and previous_row.ticket_promedio else None
             } if previous_row else None,
-            'variaciones': variaciones if previous_row else None,
+            'variaciones': variaciones,
             'top_periodos_fiscales': top_periodos
         }
 
@@ -445,7 +567,10 @@ def get_month_detail(periodo):
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
+        error_msg = str(e)
+        if 'Quota exceeded' in error_msg or '403' in error_msg:
+            return jsonify({'error': 'Cuota de BigQuery excedida. Espera unos segundos e intenta de nuevo.'}), 503
+        return jsonify({'error': error_msg}), 500
 
 
 @app.route('/api/metrics/nextsteps', methods=['GET'])
@@ -461,6 +586,7 @@ def get_nextsteps_metrics():
         FORMAT_DATE('%Y-%m', MIN(EVENT_DATE)) as cohort_mes
       FROM `WHOWNER.BT_MP_DAS_TAX_EVENTS`
       WHERE EVENT_TYPE IN ('SERPRO-Emission', 'Payment')
+        AND EVENT_DATE <= CURRENT_DATE()
       GROUP BY CUS_CUST_ID
     ),
     monthly_activity AS (
@@ -472,6 +598,7 @@ def get_nextsteps_metrics():
       FROM `WHOWNER.BT_MP_DAS_TAX_EVENTS` e
       INNER JOIN seller_first_month c ON e.CUS_CUST_ID = c.CUS_CUST_ID
       WHERE e.EVENT_TYPE IN ('SERPRO-Emission', 'Payment')
+        AND e.EVENT_DATE <= CURRENT_DATE()
     )
     SELECT
       cohort_mes,
@@ -499,6 +626,7 @@ def get_nextsteps_metrics():
         COUNT(DISTINCT DATE(EVENT_DATE)) as dias_activos
       FROM `WHOWNER.BT_MP_DAS_TAX_EVENTS`
       WHERE EVENT_TYPE IN ('SERPRO-Emission', 'Payment')
+        AND EVENT_DATE <= CURRENT_DATE()
       GROUP BY CUS_CUST_ID
     )
     """
@@ -655,10 +783,13 @@ def get_pendings_summary():
     pagos_reales AS (
       SELECT
         COUNT(*) as total_pagos_reales,
-        COUNT(DISTINCT CUS_CUST_ID) as sellers_pagos_reales
+        COUNT(DISTINCT CUS_CUST_ID) as sellers_pagos_reales,
+        COUNTIF(FROM_VALUE = 'pending') as total_pagos_from_value,
+        COUNT(DISTINCT CASE WHEN FROM_VALUE = 'pending' THEN CUS_CUST_ID END) as sellers_pagos_from_value
       FROM `WHOWNER.BT_MP_DAS_TAX_EVENTS`
       WHERE EVENT_TYPE = 'Payment'
         AND EVENT_DATE IS NOT NULL
+        AND EVENT_DATE <= CURRENT_DATE()
         AND (CAST(YEAR AS INT64) > 2025 OR (CAST(YEAR AS INT64) = 2025 AND CAST(MONTH AS INT64) >= 12))
     )
     SELECT
@@ -666,10 +797,13 @@ def get_pendings_summary():
       p.total_pagadas_desde_notif,
       p.total_descartadas,
       pr.total_pagos_reales,
+      pr.total_pagos_from_value,
+      pr.sellers_pagos_from_value,
       p.sellers_unicos,
       pr.sellers_pagos_reales,
       ROUND((p.total_pagadas_desde_notif * 100.0 / NULLIF(p.total_enviadas, 0)), 2) as tasa_conversion_notif,
       ROUND((p.total_pagadas_desde_notif * 100.0 / NULLIF(pr.total_pagos_reales, 0)), 2) as tasa_conversion_pagos,
+      ROUND((pr.total_pagos_from_value * 100.0 / NULLIF(pr.total_pagos_reales, 0)), 2) as tasa_from_value,
       ROUND(tp.dias_promedio, 1) as tiempo_promedio_dias
     FROM pendings_totals p
     CROSS JOIN tiempo_pago tp
@@ -689,11 +823,14 @@ def get_pendings_summary():
             'total_enviadas': row.total_enviadas,
             'total_pagadas_desde_notif': row.total_pagadas_desde_notif,
             'total_pagos_reales': row.total_pagos_reales,
+            'total_pagos_from_value': row.total_pagos_from_value,
+            'sellers_pagos_from_value': row.sellers_pagos_from_value,
             'total_descartadas': row.total_descartadas,
             'sellers_unicos': row.sellers_unicos,
             'sellers_pagos_reales': row.sellers_pagos_reales,
             'tasa_conversion_notif': float(row.tasa_conversion_notif) if row.tasa_conversion_notif else 0,
             'tasa_conversion_pagos': float(row.tasa_conversion_pagos) if row.tasa_conversion_pagos else 0,
+            'tasa_from_value': float(row.tasa_from_value) if row.tasa_from_value else 0,
             'tiempo_promedio_dias': float(row.tiempo_promedio_dias) if row.tiempo_promedio_dias else 0
         })
 
@@ -704,9 +841,20 @@ def get_pendings_summary():
 @app.route('/api/pendings/monthly', methods=['GET'])
 def get_pendings_monthly():
     """
-    Obtiene evolución mensual de notificaciones (sin desglose por criticidad)
+    Obtiene evolución mensual de notificaciones.
+    ?filter=event  → agrupa pagos por EVENT_DATE (cuándo se ejecutó el pago)
+    ?filter=fiscal → agrupa pagos por período fiscal (YEAR/MONTH de la tabla)
+    Las notificaciones siempre se agrupan por created_at (DIM_PENDINGS).
     """
-    query = """
+    from flask import request
+    filter_type = request.args.get('filter', 'event')
+
+    if filter_type == 'fiscal':
+        pagos_periodo_expr = "CONCAT(YEAR, '-', LPAD(CAST(MONTH AS STRING), 2, '0'))"
+    else:
+        pagos_periodo_expr = "FORMAT_DATE('%Y-%m', EVENT_DATE)"
+
+    query = f"""
     WITH enviadas AS (
       SELECT
         FORMAT_TIMESTAMP('%Y-%m', created_at) as periodo,
@@ -715,49 +863,25 @@ def get_pendings_monthly():
       FROM `meli-bi-data.SBOX_SBOXMERCH.DIM_PENDINGS`
       WHERE content_id = 'mp.sellers.generic_pendings.das_payment_pendings'
         AND event = 'created'
-        AND reason = 'success'
-      GROUP BY periodo
-    ),
-    pagadas AS (
-      SELECT
-        FORMAT_TIMESTAMP('%Y-%m', published) as periodo,
-        COUNT(*) as total,
-        COUNT(DISTINCT user_id) as sellers_unicos
-      FROM `meli-bi-data.SBOX_SBOXMERCH.DIM_PENDINGS`
-      WHERE content_id = 'mp.sellers.generic_pendings.das_payment_pendings'
-        AND event = 'deleted'
-        AND reason IN ('success', 'success_web')
-      GROUP BY periodo
-    ),
-    descartadas AS (
-      SELECT
-        FORMAT_TIMESTAMP('%Y-%m', published) as periodo,
-        COUNT(*) as total,
-        COUNT(DISTINCT user_id) as sellers_unicos
-      FROM `meli-bi-data.SBOX_SBOXMERCH.DIM_PENDINGS`
-      WHERE content_id = 'mp.sellers.generic_pendings.das_payment_pendings'
-        AND event = 'deleted'
-        AND reason = 'dismiss'
       GROUP BY periodo
     ),
     pagos_reales AS (
       SELECT
-        FORMAT_DATE('%Y-%m', EVENT_DATE) as periodo,
+        {pagos_periodo_expr} as periodo,
         COUNT(*) as total,
-        COUNT(DISTINCT CUS_CUST_ID) as sellers_unicos
+        COUNT(DISTINCT CUS_CUST_ID) as sellers_unicos,
+        COUNTIF(FROM_VALUE = 'pending') as total_from_value,
+        COUNT(DISTINCT CASE WHEN FROM_VALUE = 'pending' THEN CUS_CUST_ID END) as sellers_from_value
       FROM `WHOWNER.BT_MP_DAS_TAX_EVENTS`
       WHERE EVENT_TYPE = 'Payment'
         AND EVENT_DATE IS NOT NULL
+        AND EVENT_DATE <= CURRENT_DATE()
         AND (CAST(YEAR AS INT64) > 2025 OR (CAST(YEAR AS INT64) = 2025 AND CAST(MONTH AS INT64) >= 12))
       GROUP BY periodo
     ),
     all_periods AS (
       SELECT DISTINCT periodo FROM (
         SELECT periodo FROM enviadas
-        UNION DISTINCT
-        SELECT periodo FROM pagadas
-        UNION DISTINCT
-        SELECT periodo FROM descartadas
         UNION DISTINCT
         SELECT periodo FROM pagos_reales
       )
@@ -766,18 +890,14 @@ def get_pendings_monthly():
       a.periodo,
       IFNULL(e.total, 0) as notificaciones_enviadas,
       IFNULL(e.sellers_unicos, 0) as sellers_enviadas,
-      IFNULL(p.total, 0) as pagos_desde_notificacion,
-      IFNULL(p.sellers_unicos, 0) as sellers_pagadas,
-      IFNULL(d.total, 0) as descartadas,
-      IFNULL(d.sellers_unicos, 0) as sellers_descartadas,
       IFNULL(pr.total, 0) as pagos_reales,
       IFNULL(pr.sellers_unicos, 0) as sellers_pagos_reales,
-      ROUND((IFNULL(p.total, 0) * 100.0 / NULLIF(IFNULL(e.total, 0), 0)), 2) as tasa_conversion_notif,
-      ROUND((IFNULL(p.total, 0) * 100.0 / NULLIF(IFNULL(pr.total, 0), 0)), 2) as tasa_conversion_pagos
+      IFNULL(pr.total_from_value, 0) as pagos_from_value,
+      IFNULL(pr.sellers_from_value, 0) as sellers_from_value,
+      ROUND((IFNULL(pr.total, 0) * 100.0 / NULLIF(IFNULL(e.total, 0), 0)), 2) as tasa_conversion_total,
+      ROUND((IFNULL(pr.total_from_value, 0) * 100.0 / NULLIF(IFNULL(pr.total, 0), 0)), 2) as tasa_from_value
     FROM all_periods a
     LEFT JOIN enviadas e ON a.periodo = e.periodo
-    LEFT JOIN pagadas p ON a.periodo = p.periodo
-    LEFT JOIN descartadas d ON a.periodo = d.periodo
     LEFT JOIN pagos_reales pr ON a.periodo = pr.periodo
     WHERE a.periodo IS NOT NULL
     ORDER BY a.periodo
@@ -792,11 +912,13 @@ def get_pendings_monthly():
             data.append({
                 'periodo': row.periodo,
                 'notificaciones_enviadas': row.notificaciones_enviadas,
-                'pagos_desde_notificacion': row.pagos_desde_notificacion,
-                'descartadas': row.descartadas,
+                'sellers_enviadas': row.sellers_enviadas,
                 'pagos_reales': row.pagos_reales,
-                'tasa_conversion_notif': float(row.tasa_conversion_notif) if row.tasa_conversion_notif else 0,
-                'tasa_conversion_pagos': float(row.tasa_conversion_pagos) if row.tasa_conversion_pagos else 0
+                'sellers_pagos_reales': row.sellers_pagos_reales,
+                'pagos_from_value': row.pagos_from_value,
+                'sellers_from_value': row.sellers_from_value,
+                'tasa_conversion_total': float(row.tasa_conversion_total) if row.tasa_conversion_total else 0,
+                'tasa_from_value': float(row.tasa_from_value) if row.tasa_from_value else 0,
             })
 
         return jsonify({'data': data})
@@ -831,6 +953,7 @@ def get_pendings_comparison():
       FROM `WHOWNER.BT_MP_DAS_TAX_EVENTS`
       WHERE EVENT_TYPE = 'Payment'
         AND EVENT_DATE IS NOT NULL
+        AND EVENT_DATE <= CURRENT_DATE()
         AND (CAST(YEAR AS INT64) > 2025 OR (CAST(YEAR AS INT64) = 2025 AND CAST(MONTH AS INT64) >= 12))
       GROUP BY periodo
     )
@@ -865,6 +988,141 @@ def get_pendings_comparison():
         return jsonify({'data': data})
 
     except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/metrics/mtd', methods=['GET'])
+def get_mtd_metrics():
+    """
+    Devuelve evolución diaria acumulada (MTD) para los últimos N meses.
+    Permite comparar el ritmo diario entre meses en: emisiones, pagos y sellers únicos.
+    """
+    from flask import request
+
+    n_months = int(request.args.get('months', 3))
+    n_months = max(2, min(n_months, 6))  # clamp 2-6
+
+    query = f"""
+    WITH month_offsets AS (
+      SELECT offset_val
+      FROM UNNEST(GENERATE_ARRAY(0, {n_months - 1})) AS offset_val
+    ),
+    months_to_analyze AS (
+      SELECT
+        FORMAT_DATE('%Y-%m', DATE_SUB(DATE_TRUNC(CURRENT_DATE(), MONTH), INTERVAL offset_val MONTH)) AS mes
+      FROM month_offsets
+    ),
+    filtered_events AS (
+      SELECT
+        FORMAT_DATE('%Y-%m', EVENT_DATE) AS mes,
+        EXTRACT(DAY FROM EVENT_DATE) AS dia,
+        EVENT_TYPE,
+        SERPRO_STATUS,
+        CUS_CUST_ID
+      FROM `WHOWNER.BT_MP_DAS_TAX_EVENTS`
+      WHERE FORMAT_DATE('%Y-%m', EVENT_DATE) IN (SELECT mes FROM months_to_analyze)
+        AND EVENT_DATE IS NOT NULL
+        AND EVENT_DATE <= CURRENT_DATE()
+        AND EVENT_TYPE IN ('SERPRO-Emission', 'Payment')
+    ),
+    daily_counts AS (
+      SELECT
+        mes,
+        dia,
+        COUNTIF(EVENT_TYPE = 'SERPRO-Emission' AND SERPRO_STATUS = 'success') AS emisiones_dia,
+        COUNTIF(EVENT_TYPE = 'Payment') AS pagos_dia
+      FROM filtered_events
+      GROUP BY mes, dia
+    ),
+    seller_first_day_emission AS (
+      SELECT mes, CUS_CUST_ID, MIN(dia) AS primer_dia
+      FROM filtered_events
+      WHERE EVENT_TYPE = 'SERPRO-Emission' AND SERPRO_STATUS = 'success'
+      GROUP BY mes, CUS_CUST_ID
+    ),
+    seller_first_day_payment AS (
+      SELECT mes, CUS_CUST_ID, MIN(dia) AS primer_dia
+      FROM filtered_events
+      WHERE EVENT_TYPE = 'Payment'
+      GROUP BY mes, CUS_CUST_ID
+    ),
+    new_sellers_per_day AS (
+      SELECT mes, primer_dia AS dia,
+        COUNT(*) AS nuevos_sellers_emisiones,
+        0 AS nuevos_sellers_pagos
+      FROM seller_first_day_emission
+      GROUP BY mes, dia
+
+      UNION ALL
+
+      SELECT mes, primer_dia AS dia,
+        0 AS nuevos_sellers_emisiones,
+        COUNT(*) AS nuevos_sellers_pagos
+      FROM seller_first_day_payment
+      GROUP BY mes, dia
+    ),
+    new_sellers_combined AS (
+      SELECT mes, dia,
+        SUM(nuevos_sellers_emisiones) AS nuevos_sellers_emisiones,
+        SUM(nuevos_sellers_pagos) AS nuevos_sellers_pagos
+      FROM new_sellers_per_day
+      GROUP BY mes, dia
+    ),
+    all_days AS (
+      SELECT m.mes, dia
+      FROM months_to_analyze m
+      CROSS JOIN UNNEST(GENERATE_ARRAY(1, 31)) AS dia
+      WHERE dia <= EXTRACT(DAY FROM LAST_DAY(DATE(CONCAT(m.mes, '-01'))))
+        AND (m.mes < FORMAT_DATE('%Y-%m', CURRENT_DATE())
+             OR (m.mes = FORMAT_DATE('%Y-%m', CURRENT_DATE()) AND dia <= EXTRACT(DAY FROM CURRENT_DATE())))
+    ),
+    combined AS (
+      SELECT
+        a.mes,
+        a.dia,
+        IFNULL(dc.emisiones_dia, 0) AS emisiones_dia,
+        IFNULL(dc.pagos_dia, 0) AS pagos_dia,
+        IFNULL(nsc.nuevos_sellers_emisiones, 0) AS nuevos_sellers_emisiones,
+        IFNULL(nsc.nuevos_sellers_pagos, 0) AS nuevos_sellers_pagos
+      FROM all_days a
+      LEFT JOIN daily_counts dc ON a.mes = dc.mes AND a.dia = dc.dia
+      LEFT JOIN new_sellers_combined nsc ON a.mes = nsc.mes AND a.dia = nsc.dia
+    )
+    SELECT
+      mes,
+      dia,
+      SUM(emisiones_dia) OVER (PARTITION BY mes ORDER BY dia) AS emisiones_acum,
+      SUM(pagos_dia) OVER (PARTITION BY mes ORDER BY dia) AS pagos_acum,
+      SUM(nuevos_sellers_emisiones) OVER (PARTITION BY mes ORDER BY dia) AS sellers_emisiones_acum,
+      SUM(nuevos_sellers_pagos) OVER (PARTITION BY mes ORDER BY dia) AS sellers_pagos_acum
+    FROM combined
+    ORDER BY mes ASC, dia ASC
+    """
+
+    try:
+        query_job = client.query(query)
+        rows = list(query_job.result())
+
+        data_by_mes = {}
+        for row in rows:
+            mes = row.mes
+            if mes not in data_by_mes:
+                data_by_mes[mes] = []
+            data_by_mes[mes].append({
+                'dia': row.dia,
+                'emisiones_acum': row.emisiones_acum,
+                'pagos_acum': row.pagos_acum,
+                'sellers_emisiones_acum': row.sellers_emisiones_acum,
+                'sellers_pagos_acum': row.sellers_pagos_acum,
+            })
+
+        meses = sorted(data_by_mes.keys())
+
+        return jsonify({'meses': meses, 'data': data_by_mes})
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 

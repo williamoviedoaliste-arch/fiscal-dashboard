@@ -334,7 +334,7 @@ const DocumentationTab = () => {
       {/* Footer */}
       <div style={{ marginTop: '40px', padding: '20px', textAlign: 'center', backgroundColor: '#F9FAFB', borderRadius: '8px' }}>
         <p style={{ color: '#666', margin: 0 }}>
-          <strong>Dashboard de Métricas Fiscales</strong> | Versión 2.0 | Última actualización: Febrero 2026
+          <strong>Dashboard de Métricas Fiscales</strong> | Versión 2.0 | Última actualización: {new Date().toLocaleDateString('es-AR', { month: 'long', year: 'numeric' })}
         </p>
         <p style={{ color: '#999', marginTop: '10px', fontSize: '14px' }}>
           Para soporte técnico o preguntas, contacta al equipo de desarrollo.

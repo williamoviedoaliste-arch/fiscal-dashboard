@@ -4,9 +4,10 @@ import ConversionChart from './ConversionChart';
 import VolumenChart from './VolumenChart';
 import PagosUnifiedChart from './PagosUnifiedChart';
 import SellersUnifiedChart from './SellersUnifiedChart';
+import SellersRecurrenceChart from './SellersRecurrenceChart';
 import InfoTooltip from './InfoTooltip';
 
-const GeneralTab = ({ monthlyData, sellersData }) => {
+const GeneralTab = ({ monthlyData, sellersData, sellersRecurrenceData }) => {
   const { summary } = monthlyData;
   const latestMonth = monthlyData.data[monthlyData.data.length - 1];
 
@@ -68,6 +69,13 @@ const GeneralTab = ({ monthlyData, sellersData }) => {
       <div className="chart-container">
         <SellersUnifiedChart data={sellersData.data} />
       </div>
+
+      {/* Análisis de Recurrencia */}
+      {sellersRecurrenceData && (
+        <div className="chart-container">
+          <SellersRecurrenceChart data={sellersRecurrenceData.data} />
+        </div>
+      )}
 
       {/* Conversión */}
       <div className="section-title">🎯 Conversión</div>
